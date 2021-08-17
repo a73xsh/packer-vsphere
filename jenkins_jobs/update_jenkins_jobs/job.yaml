@@ -1,0 +1,73 @@
+- wrapper:
+    name: jenkins-job-builder-credentials
+    wrappers:
+      - credentials-binding:
+          - text:
+              credential-id: jenkins-job-builder-jenkins-url
+              variable: JENKINS_URL
+          - text:
+              credential-id: jenkins-job-builder-jenkins-user
+              variable: JENKINS_ADMIN_USER
+          - text:
+              credential-id: jenkins-job-builder-jenkins-password
+              variable: JENKINS_ADMIN_PASSWORD
+
+- scm:
+    name: packer-vsphere
+    scm:
+      - git:
+          url: https://github.com/a73xsh/packer-vsphere.git
+          branches:
+            - master
+          basedir: packer-vsphere
+          clean:
+            before: true
+            after: false
+          wipe-workspace: true
+          timeout: 5
+
+- job:
+    name: build_templates/update_jenkins_jobs
+    node: packer
+    concurrent: true
+    properties:
+      - throttle:
+          enabled: true
+          max-per-node: 1
+          max-total: 1
+          option: project
+    parameters:
+      - string:
+          name: BUILD_DIRECTORY
+          default: 'templates_jobs'
+          description: 'Select the templates directory in the repository to work on'
+      - bool:
+          name: DELETE_OLD
+          default: false
+          description: "Should we delete old unused or manually created jobs"
+    triggers:
+      - timed: '@daily'
+    scm:
+      - packer-vsphere
+    wrappers:
+      - jenkins-job-builder-credentials
+      - ansicolor:
+          colormap: "xterm"
+      - timestamps
+    builders:
+      - shell: !include-raw: builder_pre.sh
+      - shell: !include-raw: builder_main.sh
+    publishers:
+      - postbuildscript:
+          mark-unstable-if-failed: true
+          builders:
+            - role: SLAVE
+              build-on:
+                - FAILURE
+              build-steps:
+                - shell: !include-raw: builder_fail.sh
+            - role: SLAVE
+              build-on:
+                - SUCCESS
+              build-steps:
+                - shell: !include-raw: builder_post.sh

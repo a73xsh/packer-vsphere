@@ -1,0 +1,60 @@
+- scm:
+    name: packer-vsphere
+    scm:
+      - git:
+          url: https://github.com/a73xsh/packer-vsphere.git
+          branches:
+            - master
+          basedir: packer-vsphere
+          clean:
+            before: true
+            after: false
+          wipe-workspace: true
+          timeout: 5
+
+- job-template:
+    name: build_templates/build_template_{template}
+    node: packer
+    concurrent: true
+    properties:
+      - throttle:
+          enabled: true
+          max-per-node: 1
+          max-total: 1
+          option: project
+    parameters:
+      - hidden:
+          name: TEMPLATE
+          default: '{template}'
+          description: 'Template variable will be accessible from the shell script'
+      - string:
+          name: TIMEOUT
+          default: '60'
+          description: ''
+    triggers:
+      - timed: '@monthly'
+    scm:
+      - packer-vsphere
+    wrappers:
+      - ansicolor:
+          colormap: "xterm"
+      - timestamps
+    builders:
+      - shell: !include-raw-escape: builder_main.sh
+
+- project:
+    name: build_template
+    template:
+      - windows-server-2019StGUI-en
+      - windows-server-2019StCore-en
+      - windows-server-2019DcGUI-en
+      - windows-server-2019DcGUI-en-mssql2016
+      - windows-server-2019DcCore-en
+      - windows-server-2016StGUI-en
+      - windows-server-2016StCore-en
+      - windows-server-2016DcGUI-en
+      - windows-server-2016DcCore-en
+      - centos-server-8-en
+      - ubuntu-server-20-04-en
+    jobs:
+      - build_templates/build_template_{template}
